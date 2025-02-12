@@ -2,7 +2,7 @@
 
 import os
 import cv2
-import cv_bridge
+from cv_bridge import CvBridge
 import rospy
 import argparse
 import os.path as osp
@@ -17,8 +17,12 @@ from mmdet.utils import get_test_pipeline_cfg
 
 import supervision as sv
 
+from sensor_msgs.msg import Image
+
 BOUNDING_BOX_ANNOTATOR = sv.BoundingBoxAnnotator(thickness=1)
 MASK_ANNOTATOR = sv.MaskAnnotator()
+
+bridge = CvBridge()
 
 
 class LabelAnnotator(sv.LabelAnnotator):
@@ -88,6 +92,7 @@ def parse_args():
 
 
 def inference_detector(model,
+                       img,
                        texts,
                        test_pipeline,
                        max_dets=100,
@@ -97,7 +102,7 @@ def inference_detector(model,
                        show=False,
                        annotation=False):
 
-    img = cv2.imread("demo/sample_images/bus.jpg")
+    # img = cv2.imread("demo/sample_images/bus.jpg")
     data_info = dict(img_id=0, img=img, texts=texts)
     # data_info = dict(img_id=0, img_path=image, texts=texts)
     data_info = test_pipeline(data_info)
@@ -135,6 +140,7 @@ def inference_detector(model,
     # label images
     anno_image = img.copy()
     image = BOUNDING_BOX_ANNOTATOR.annotate(img, detections)
+    # print(detections)
     image = LABEL_ANNOTATOR.annotate(img, detections, labels=labels)
     if masks is not None:
         image = MASK_ANNOTATOR.annotate(img, detections)
@@ -164,10 +170,7 @@ def inference_detector(model,
 
     if show:
         cv2.imshow('Image', image)  # Provide window name
-        k = cv2.waitKey(0)
-        if k == 27:
-            # wait for ESC key to exit
-            cv2.destroyAllWindows()
+        k = cv2.waitKey(1)
 
 
 if __name__ == '__main__':
@@ -224,7 +227,22 @@ if __name__ == '__main__':
     #                    use_amp=args.amp,
     #                    show=args.show,
     #                    annotation=args.annotation)
+    print("waiting for image topic", flush=True)
+    rospy.wait_for_message("/usb_cam/image_raw", Image)
     def image_callback(msg):
         cv_image = bridge.imgmsg_to_cv2(msg)
+        cv_image = cv2.cvtColor(cv_image, cv2.COLOR_BGR2RGB)
 
-    rospy.Subscriber("image", Image, image_callback)
+        inference_detector(model,
+                           cv_image,
+                           texts,
+                           test_pipeline,
+                           args.topk,
+                           args.threshold,
+                           output_dir=output_dir,
+                           use_amp=args.amp,
+                           show=args.show,
+                           annotation=args.annotation)
+
+    rospy.Subscriber("/usb_cam/image_raw", Image, image_callback)
+    rospy.spin()
