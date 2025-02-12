@@ -1,6 +1,8 @@
 # Copyright (c) Tencent Inc. All rights reserved.
+
 import os
 import cv2
+import cv_bridge
 import rospy
 import argparse
 import os.path as osp
@@ -41,7 +43,7 @@ def parse_args():
     parser = argparse.ArgumentParser(description='YOLO-World Demo')
     parser.add_argument('config', help='test config file path')
     parser.add_argument('checkpoint', help='checkpoint file')
-    parser.add_argument('image', help='image path, include image file or dir.')
+    # parser.add_argument('image', help='image path, include image file or dir.')
     parser.add_argument(
         'text',
         help=
@@ -86,7 +88,6 @@ def parse_args():
 
 
 def inference_detector(model,
-                       image,
                        texts,
                        test_pipeline,
                        max_dets=100,
@@ -95,8 +96,12 @@ def inference_detector(model,
                        use_amp=False,
                        show=False,
                        annotation=False):
-    data_info = dict(img_id=0, img_path=image, texts=texts)
+
+    img = cv2.imread("demo/sample_images/bus.jpg")
+    data_info = dict(img_id=0, img=img, texts=texts)
+    # data_info = dict(img_id=0, img_path=image, texts=texts)
     data_info = test_pipeline(data_info)
+
     data_batch = dict(inputs=data_info['inputs'].unsqueeze(0),
                       data_samples=[data_info['data_samples']])
 
@@ -128,13 +133,13 @@ def inference_detector(model,
     ]
 
     # label images
-    image = cv2.imread(image_path)
-    anno_image = image.copy()
-    image = BOUNDING_BOX_ANNOTATOR.annotate(image, detections)
-    image = LABEL_ANNOTATOR.annotate(image, detections, labels=labels)
+    anno_image = img.copy()
+    image = BOUNDING_BOX_ANNOTATOR.annotate(img, detections)
+    image = LABEL_ANNOTATOR.annotate(img, detections, labels=labels)
     if masks is not None:
-        image = MASK_ANNOTATOR.annotate(image, detections)
-    cv2.imwrite(osp.join(output_dir, osp.basename(image_path)), image)
+        image = MASK_ANNOTATOR.annotate(img, detections)
+
+    # cv2.imwrite(osp.join(output_dir, osp.basename(image_path)), image)
 
     if annotation:
         images_dict = {}
@@ -166,6 +171,9 @@ def inference_detector(model,
 
 
 if __name__ == '__main__':
+
+    rospy.init_node("yolo_world_node")
+
     args = parse_args()
 
     # load config
@@ -181,7 +189,8 @@ if __name__ == '__main__':
 
     # init test pipeline
     test_pipeline_cfg = get_test_pipeline_cfg(cfg=cfg)
-    # test_pipeline[0].type = 'mmdet.LoadImageFromNDArray'
+    # test_pipeline_cfg[0].type = 'mmdet.LoadImageFromNDArray'
+    test_pipeline_cfg[0].type = 'mmdet.LoadImageFromNDArray'
     test_pipeline = Compose(test_pipeline_cfg)
 
     if args.text.endswith('.txt'):
@@ -196,26 +205,26 @@ if __name__ == '__main__':
         os.mkdir(output_dir)
 
     # load images
-    if not osp.isfile(args.image):
-        images = [
-            osp.join(args.image, img) for img in os.listdir(args.image)
-            if img.endswith('.png') or img.endswith('.jpg')
-        ]
-    else:
-        images = [args.image]
+    # if not osp.isfile(args.image):
+    #     images = [
+    #         osp.join(args.image, img) for img in os.listdir(args.image)
+    #         if img.endswith('.png') or img.endswith('.jpg')
+    #     ]
+    # else:
+    #     images = [args.image]
 
     # reparameterize texts
     model.reparameterize(texts)
-    progress_bar = ProgressBar(len(images))
-    for image_path in images:
-        inference_detector(model,
-                           image_path,
-                           texts,
-                           test_pipeline,
-                           args.topk,
-                           args.threshold,
-                           output_dir=output_dir,
-                           use_amp=args.amp,
-                           show=args.show,
-                           annotation=args.annotation)
-        progress_bar.update()
+    # inference_detector(model,
+    #                    texts,
+    #                    test_pipeline,
+    #                    args.topk,
+    #                    args.threshold,
+    #                    output_dir=output_dir,
+    #                    use_amp=args.amp,
+    #                    show=args.show,
+    #                    annotation=args.annotation)
+    def image_callback(msg):
+        cv_image = bridge.imgmsg_to_cv2(msg)
+
+    rospy.Subscriber("image", Image, image_callback)
