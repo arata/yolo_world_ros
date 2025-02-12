@@ -1,5 +1,9 @@
 # Copyright (c) Tencent Inc. All rights reserved.
 
+# original file: https://github.com/AILab-CVC/YOLO-World/blob/master/demo/image_demo.py
+# Modified by: Arata Sakamaki
+
+
 import os
 import cv2
 from cv_bridge import CvBridge
