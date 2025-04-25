@@ -25,6 +25,7 @@ RUN mim install mmyolo
 RUN apt-get update && apt-get install -q -y --no-install-recommends \
     dirmngr \
     gnupg2 \
+    git \
     && rm -rf /var/lib/apt/lists/*
 
 # setup keys
@@ -50,7 +51,13 @@ ENV ROS_DISTRO noetic
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ros-noetic-ros-core=1.5.0-1* \
     ros-noetic-cv-bridge \
+    ros-noetic-tf2-ros \
+    ros-noetic-tf2-geometry-msgs \
     && rm -rf /var/lib/apt/lists/*
+
+RUN pip install rosnumpy
+
+RUN git clone https://github.com/AILab-CVC/YOLO-World
 
 # setup entrypoint
 COPY ./ros_entrypoint.sh /

@@ -6,8 +6,12 @@
 
 import os
 import cv2
+import numpy as np
 from cv_bridge import CvBridge
 import rospy
+import tf2_ros
+import tf2_geometry_msgs
+import ros_numpy
 import argparse
 import os.path as osp
 
@@ -21,7 +25,8 @@ from mmdet.utils import get_test_pipeline_cfg
 
 import supervision as sv
 
-from sensor_msgs.msg import Image
+from sensor_msgs.msg import Image, PointCloud2
+from geometry_msgs.msg import PointStamped
 
 BOUNDING_BOX_ANNOTATOR = sv.BoundingBoxAnnotator(thickness=1)
 MASK_ANNOTATOR = sv.MaskAnnotator()
@@ -172,9 +177,11 @@ def inference_detector(model,
                 max_image_area_percentage=MAX_IMAGE_AREA_PERCENTAGE,
                 approximation_percentage=APPROXIMATION_PERCENTAGE)
 
-    if show:
-        cv2.imshow('Image', image)  # Provide window name
-        k = cv2.waitKey(1)
+    # if show:
+    #     cv2.imshow('Image', image)  # Provide window name
+    #     k = cv2.waitKey(1)
+
+    return detections
 
 
 if __name__ == '__main__':
@@ -231,22 +238,58 @@ if __name__ == '__main__':
     #                    use_amp=args.amp,
     #                    show=args.show,
     #                    annotation=args.annotation)
+
     print("waiting for image topic", flush=True)
-    rospy.wait_for_message("/usb_cam/image_raw", Image)
-    def image_callback(msg):
-        cv_image = bridge.imgmsg_to_cv2(msg)
-        cv_image = cv2.cvtColor(cv_image, cv2.COLOR_BGR2RGB)
+    rospy.wait_for_message("/hsrb/head_rgbd_sensor/depth_registered/rectified_points", PointCloud2)
+    def points_callback(msg):
 
-        inference_detector(model,
-                           cv_image,
-                           texts,
-                           test_pipeline,
-                           args.topk,
-                           args.threshold,
-                           output_dir=output_dir,
-                           use_amp=args.amp,
-                           show=args.show,
-                           annotation=args.annotation)
+        point_data = ros_numpy.numpify(msg)
+        image_data = point_data['rgb'].view((np.uint8, 4))[..., [2, 1, 0]]
+        cv_image = cv2.cvtColor(image_data, cv2.COLOR_BGR2RGB)
 
-    rospy.Subscriber("/usb_cam/image_raw", Image, image_callback)
+        res = inference_detector(model,
+                                 cv_image,
+                                 texts,
+                                 test_pipeline,
+                                 args.topk,
+                                 args.threshold,
+                                 output_dir=output_dir,
+                                 use_amp=args.amp,
+                                 show=args.show,
+                                 annotation=args.annotation)
+        """
+        Detections(xyxy=array([[3.5165250e+02, 1.9043289e+02, 3.8947412e+02, 3.0885837e+02],
+        yolo_world_ros  |        [4.0207863e-02, 2.9672659e+02, 2.5839869e+01, 3.6097986e+02]],
+        yolo_world_ros  |       dtype=float32), mask=None, confidence=array([0.46065232, 0.3217132 ], dtype=float32), class_id=array([0, 0]), tracker_id=None, data={}, metadata={})
+
+        """
+
+        x1, y1, x2, y2 = res.xyxy[0]
+        cv2.rectangle(cv_image, (int(x1), int(y1)), (int(x2), int(y2)), (255, 0, 255), 2, cv2.LINE_AA)
+        cv2.imshow("win", cv_image)
+        cv2.waitKey(1)
+
+        x_center = int((x1 + x2) / 2 )
+        y_center = int((y1 + y2) / 2 )
+
+        points = point_data[y_center, x_center]
+
+        point_stamped = PointStamped()
+        # point_stamped.header.stamp = msg.header.stamp
+        point_stamped.header.stamp = rospy.Time.now()
+        point_stamped.header.frame_id = msg.header.frame_id
+        point_stamped.point.x = points[0]
+        point_stamped.point.y = points[1]
+        point_stamped.point.z = points[2]
+        print(point_stamped)
+
+        target_pt = tf_buffer.transform(point_stamped, "base_link", rospy.Duration(1))
+
+        pub.publish(target_pt)
+
+    tf_buffer = tf2_ros.Buffer()
+    tf_listener = tf2_ros.TransformListener(tf_buffer)
+
+    rospy.Subscriber("/hsrb/head_rgbd_sensor/depth_registered/rectified_points", PointCloud2, points_callback)
+    pub = rospy.Publisher("yolo_world_res", PointStamped, queue_size=10)
     rospy.spin()

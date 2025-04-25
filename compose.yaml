@@ -7,7 +7,6 @@ services:
     ipc: host
     volumes:
       - /tmp/.X11-unix:/tmp/.X11-unix
-      - ./YOLO-World/:/YOLO-World
       - ./yolo_world_node.py:/YOLO-World/demo/yolo_world_node.py
     environment:
       DISPLAY: $DISPLAY
@@ -21,5 +20,5 @@ services:
             - capabilities: [ gpu ]
     working_dir: /YOLO-World
     # command: "bash -c 'PYTHONPATH=./ python3 demo/image_demo.py configs/pretrain/yolo_world_v2_s_vlpan_bn_2e-3_100e_4x8gpus_obj365v1_goldg_train_lvis_minival.py weights/yolo_world_v2_s_obj365v1_goldg_pretrain-55b943ea.pth demo/sample_images/bus.jpg 'person,people,bus' --topk 100 --threshold 0.25 --output-dir out'"
-    command: "bash -c 'PYTHONPATH=$PYTHONPATH:./ python3 demo/yolo_world_node.py configs/pretrain/yolo_world_v2_s_vlpan_bn_2e-3_100e_4x8gpus_obj365v1_goldg_train_lvis_minival.py weights/yolo_world_v2_s_obj365v1_goldg_pretrain-55b943ea.pth 'bottle' --topk 100 --threshold 0.25 --output-dir out --show'"
+    command: "bash -c 'PYTHONPATH=$PYTHONPATH:./ python3 -u demo/yolo_world_node.py configs/pretrain/yolo_world_v2_s_vlpan_bn_2e-3_100e_4x8gpus_obj365v1_goldg_train_lvis_minival.py weights/yolo_world_v2_s_obj365v1_goldg_pretrain-55b943ea.pth 'bottle' --topk 100 --threshold 0.25 --output-dir out --show'"
     
